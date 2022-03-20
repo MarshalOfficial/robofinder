@@ -20,13 +20,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     //let domain = Arc::new(&args[1]);
-    let domain = "oppo.com";
+    let domain = &args[1];
     //&args[1];
     //let arg: &'static str = Box::leak(&args[1]);
 
     // println!("{:?}", args);
 
-    let base_url = format!("https://web.archive.org/cdx/search/cdx?url={}/robots.txt&output=json&filter=statuscode:200&fl=timestamp,original&collapse=digest",domain);
+    let base_url = format!("https://web.archive.org/cdx/search/cdx?url={}/robots.txt&output=json&filter=statuscode:200&fl=timestamp,original&collapse=digest","amazon.com"); //domain
     let resp = reqwest::get(base_url).await?.text().await?;
 
     let json: Vec<TimeRecord> = serde_json::from_str(&resp).expect("JSON was not well-formatted");
@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // println!("timeStamp: {:#?}, Url: {:#?}", obj.timeStamp, obj.url);
         let handle = tokio::spawn(async {
-            get_robot_file(domain, obj.timeStamp, obj.url).await;
+            get_robot_file(&String::from("amazon.com"), obj.timeStamp, obj.url).await;
         });
         handles.push(handle);
         // get_robot_file(domain, obj.timeStamp, obj.url).await?;
@@ -92,7 +92,7 @@ async fn get_robot_file(
                 result.push_str(base_domain);
                 result.push_str(temp);
                 // println!("base item: {:#?}", &item);
-                println!("final one: {:#?}", &result);
+                println!("{:#?}", &result);
             }
         }
     }
