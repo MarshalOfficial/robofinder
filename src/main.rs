@@ -1,7 +1,10 @@
 use regex::Regex;
 use serde::*;
+use std::any::Any;
 use std::collections::*;
 use std::env;
+use std::thread;
+use std::time::Duration;
 
 #[derive(Serialize, Deserialize)]
 struct TimeRecord {
@@ -12,10 +15,14 @@ struct TimeRecord {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
-    if (args.len() == 1) {
+    if args.len() == 1 {
         panic!("Pass the domain name in the parameter!");
     }
-    let domain: &String = &args[1];
+
+    //let domain = Arc::new(&args[1]);
+    let domain = "oppo.com";
+    //&args[1];
+    //let arg: &'static str = Box::leak(&args[1]);
 
     // println!("{:?}", args);
 
@@ -23,6 +30,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let resp = reqwest::get(base_url).await?.text().await?;
 
     let json: Vec<TimeRecord> = serde_json::from_str(&resp).expect("JSON was not well-formatted");
+    let mut handles = Vec::new();
+    let mut result: HashMap<char, usize> = HashMap::new();
 
     for obj in json {
         if obj.url == "original" {
@@ -30,7 +39,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // println!("timeStamp: {:#?}, Url: {:#?}", obj.timeStamp, obj.url);
-        get_robot_file(obj.timeStamp, obj.url).await?;
+        let handle = tokio::spawn(async {
+            get_robot_file(domain, obj.timeStamp, obj.url).await;
+        });
+        handles.push(handle);
+        // get_robot_file(domain, obj.timeStamp, obj.url).await?;
+    }
+
+    for handle in handles {
+        let map = handle.await.unwrap();
     }
 
     //println!("{:#?}", json);
@@ -38,8 +55,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn get_robot_file(
+    base_domain: &String,
     timestamp: String,
-    mut url: String,
+    url: String,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let base_url = format!("http://web.archive.org/web/{}if_/{}", timestamp, url);
     // println!("second call url: {:#?}", base_url);
@@ -50,14 +68,32 @@ async fn get_robot_file(
     }
 
     // let items = resp.split("\n");
-    let items: Vec<&str> = resp.split("\n").collect();
+    let items: Vec<&str> = resp.trim().split("\n").collect();
 
-    let _regex = Regex::new(r#"(?i)(disallow|allow)(\\s?)\\:(\\s?)(.*)""#).unwrap();
+    // let _regex = Regex::new(r"(?i)(disallow|allow)(\\s?)\\:(\\s?)(.*)").unwrap();
 
     for item in items {
-        if _regex.is_match(&item) {
+        // println!("before check::::: {:#?}", item);
+        //if _regex.is_match(item) {
+        if item.to_lowercase().contains("disallow:") || item.to_lowercase().contains("allow:") {
+            // println!("regex match::::: {:#?}", item);
             let sub_item: Vec<&str> = item.split(": ").collect();
-            println!("is fucking match: {:#?}", &url.push_str(sub_item[1]));
+            if sub_item.capacity() <= 1 {
+                continue;
+            }
+
+            let temp = &sub_item[1]
+                .replace("\n", "")
+                .replace("*", "")
+                .replace("\r", "");
+
+            if !temp.is_empty() {
+                let mut result = String::new();
+                result.push_str(base_domain);
+                result.push_str(temp);
+                // println!("base item: {:#?}", &item);
+                println!("final one: {:#?}", &result);
+            }
         }
     }
 
